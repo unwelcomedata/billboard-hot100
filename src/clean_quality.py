@@ -476,27 +476,39 @@ def bucket_genre(tags: Any) -> str:
     deterministic and independent of enrichment coverage: an artist with no
     usable tags returns "Other/Unknown".
 
-    Algorithm:
-      1. Parse `tags` (a JSON string, a list of {name, count} dicts, or a list of
-         strings) into (tag, count) pairs. A missing/zero/negative count counts
-         as weight 1 (MB counts are up/down-votes; we only use them to break ties
-         between competing buckets, not to discard a tag).
-      2. Normalize each tag (lowercase, unify r&b/rnb, synth-pop, etc.) and DROP
-         noise tags (nationalities, decades, roles/junk).
-      3. Map each surviving tag to a bucket via ordered keyword rules
-         (_BUCKET_RULES). Accumulate each tag's weight into its bucket AND track
-         the best (lowest) precedence index seen per bucket.
-      4. Pick the winning bucket by: highest accumulated weight, then — on a tie —
-         the higher-precedence bucket (specific genres beat the catch-all Pop).
-      5. No bucket matched / only-noise tags / empty -> "Other/Unknown".
+    RULE — "top tag wins" (owner decision 2026-10-14): an artist's genre is the
+    bucket of its SINGLE highest-MusicBrainz-count non-noise tag. This matches how
+    the public actually perceives an artist ("when I think Taylor Swift I think
+    Pop", not Country), rather than crediting an artist's full tag profile. It is
+    a deliberate change from an earlier weighted-sum rule, which siphoned crossover
+    stars into their roots/origin genre (Taylor Swift → Country via the summed
+    country-family tags; Michael Jackson / Beyoncé → R&B/Soul). Under top-tag-wins
+    those read as Pop, because "pop" is literally their most-voted MB tag.
 
-    PRECEDENCE (high → low), the core judgment call:
+    Algorithm:
+      1. Parse `tags` (JSON string, list of {name, count} dicts, or list of
+         strings) into (tag, count) pairs; a missing count = 0.
+      2. Sort tags by MB count, highest first.
+      3. Walk them in that order; normalize each (lowercase, unify r&b/rnb,
+         synth-pop, etc.), skip noise (nationalities, decades, roles/junk), and
+         return the bucket of the FIRST tag that maps to one. That first mapping
+         is the artist's single most-voted genre tag.
+      4. On an exact count TIE between the top competing tags, the ordered keyword
+         rules (_BUCKET_RULES) still decide via the usual precedence (a specific
+         genre beats the catch-all "pop"); this only matters when counts are equal.
+      5. No bucket matched / only-noise tags / empty → "Other/Unknown".
+
+    KNOWN CAVEAT (document in SOURCES.md): crossover superstars whose single
+    top MB tag is "pop" (Michael Jackson, Beyoncé, Rihanna, Bruno Mars, Adele,
+    Taylor Swift) read as Pop, so Pop absorbs them rather than their R&B/soul or
+    country roots. This is intended under "what the public perceives", but it means
+    Pop runs larger and the roots genres smaller than a lineage-based taxonomy would.
+
+    PRECEDENCE (tiebreaker only, high → low):
         Hip-Hop/Rap > Country > R&B/Soul > Dance/Electronic > Folk > Jazz
         > Blues > Rock > Pop > Other/Unknown
-    so e.g. "country pop" → Country, "pop rap" → Hip-Hop/Rap, "pop soul" →
-    R&B/Soul, "dance-pop" → Dance/Electronic, "pop rock" → Rock. Disco folds into
-    Dance/Electronic and funk into R&B/Soul (documented). Latin/reggae/metal lack
-    the tag volume for their own bucket and fall to Other/Unknown.
+    Disco folds into Dance/Electronic and funk into R&B/Soul (documented).
+    Latin/reggae/metal lack the tag volume for their own bucket and fall to Other.
 
     Args:
         tags: JSON string, list[dict{name,count}], or list[str] of raw MB tags.
@@ -529,38 +541,34 @@ def bucket_genre(tags: Any) -> str:
             cnt = int(cnt)
         except (ValueError, TypeError):
             cnt = 0
-        weight = cnt if cnt and cnt > 0 else 1  # tie-break weight; floor at 1
         if name:
-            pairs.append((name, weight))
+            pairs.append((name, cnt))
 
     if not pairs:
         return OTHER_UNKNOWN
 
-    # 2–3. Normalize, drop noise, map to buckets, accumulate ----------------
+    # 2. Sort by MB count, highest first. On an exact count tie, order the tied
+    #    tags by their bucket precedence (lower _BUCKET_RULES index = higher
+    #    precedence) so a specific genre beats bare "pop" only when counts are equal.
     _prec = {bucket: i for i, (bucket, _) in enumerate(_BUCKET_RULES)}
-    bucket_weight: dict[str, int] = {}
-    bucket_best_prec: dict[str, int] = {}
-    for name, weight in pairs:
+
+    def _tag_prec(name: str) -> int:
+        b = _bucket_for_tag(_normalize_tag(name))
+        return _prec.get(b, 999)
+
+    pairs.sort(key=lambda p: (-p[1], _tag_prec(p[0])))
+
+    # 3. First (highest-count, non-noise) tag that maps to a bucket wins.
+    for name, _cnt in pairs:
         norm = _normalize_tag(name)
         if _is_noise(norm):
             continue
         bucket = _bucket_for_tag(norm)
-        if bucket is None:
-            continue
-        bucket_weight[bucket] = bucket_weight.get(bucket, 0) + weight
-        bucket_best_prec[bucket] = min(
-            bucket_best_prec.get(bucket, 999), _prec[bucket]
-        )
+        if bucket is not None:
+            return bucket
 
-    if not bucket_weight:
-        return OTHER_UNKNOWN
-
-    # 4. Winner: max accumulated weight, ties broken by precedence (lower = better)
-    winner = max(
-        bucket_weight,
-        key=lambda b: (bucket_weight[b], -bucket_best_prec[b]),
-    )
-    return winner
+    # 5. Nothing mapped.
+    return OTHER_UNKNOWN
 
 
 def genre_fields(tags: Any) -> tuple[str, int, str]:
