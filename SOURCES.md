@@ -94,23 +94,49 @@ acceptable for this tier and cited plainly below.
 - **Coverage:** artists with **≥ 20 Hot 100 appearances** (~4,427 artists, ~85% of all
   chart appearances). Billboard carries no genre, so this is the only genre signal.
 - **How the source collects the data:** community-contributed tags on the MusicBrainz
-  open music encyclopedia. We take the **top artist match** per Billboard-spelling name.
+  open music encyclopedia. We take the **top artist match** per Billboard credit.
 - **How the source defines the data:** a "tag" is a free-text label editors attach to an
   artist (e.g. `pop`, `country`, `synth-pop`), with a `count` = how many editors applied
   it. Tags are **artist-level and whole-catalog**, not per-song or point-in-time. They
   are intentionally stored raw and messy here; bucketing to aggregate genres is `02-clean`.
+- **Artist-name normalization (matching method, documented):** Billboard credit strings
+  carry featuring / backing-band / collaboration formatting ("Elvis Presley With The
+  Jordanaires", "Prince And The Revolution", "Drake & 21 Savage", "Paul McCartney And
+  Wings") that does not match a MusicBrainz **canonical** artist name, so a first pass
+  querying the raw credit with an exact-quoted search left ~1,281 of 4,427 artists
+  unmatched. We added `normalize_artist_for_mb()` (`src/ingest.py`) which derives the
+  **primary artist** for lookup: it cuts featuring/with/duet/vs credits, strips
+  orchestra/session-band and parenthetical tails, and splits a true co-bill to the FIRST
+  (primary) artist — while deliberately KEEPING Motown-style "<Lead> & The <Group>" names
+  whole ("Diana Ross & The Supremes", "Martha & The Vandellas"). For a genuine two-artist
+  co-bill ("Drake & 21 Savage") taking the primary ("Drake") is a conscious choice for an
+  **artist-level** genre. The unmatched set is then re-queried with the normalized name and
+  a **forgiving (unquoted) Lucene query** that returns a score-ranked match. A small
+  **curated alias map** (also in `src/ingest.py`) handles stubborn names cleaning alone
+  can't fix (e.g. `Daryl Hall John Oates`→`Daryl Hall & John Oates`, `'N Sync`→`*NSYNC`,
+  `Jackson 5`→`The Jackson 5`, `The 4 Seasons`→`The Four Seasons`, `Dixie Chicks`→`The
+  Chicks`); each alias was verified to resolve to the intended artist on MB before adding.
+  Records stay keyed by the **original Billboard spelling** (so the downstream join is
+  unaffected) and record the normalized `query_name` for auditability.
 - **Methodology changes / series breaks:** crowd-sourced tags change as editors add/remove
   them; a genre assigned to an artist's early-career Hot 100 hit is approximate (reflects
   the artist's whole career as currently tagged). Only artists above the appearance
   threshold are enriched — lower-appearance artists are left ungenred (treated as
-  Other/unknown downstream). This is a deliberate ingest-scope decision, not a data gap in
+  Other/Unknown downstream). This is a deliberate ingest-scope decision, not a data gap in
   the source.
+- **Honest residual (Other/Unknown):** after name-normalization + the Latin/Metal buckets,
+  the remaining Other/Unknown is dominated by the **genuine long tail of artists with
+  < 20 Hot 100 appearances**, which are below the enrichment threshold and never queried.
+  This tail is left as honest Other/Unknown rather than chased — it is the lowest-value,
+  hardest-to-recover slice, and the chart carries the disclosure. A smaller residual is
+  artists MusicBrainz matched but whose tags carry no usable genre signal.
 - **Known controversies / debates:** tag quality varies by artist popularity; obscure
   artists may have few or no tags. Fun-tier crowd source — acceptable and cited plainly.
 - **Notes:** descriptive `User-Agent` required (else 403); rate-limited to ~1 req/sec
-  (1.1s used, with backoff). Every lookup cached to `data/raw/mb_artist_cache.jsonl`
-  (resumable). Unmatched artists kept with `matched=false` + empty tags.
-- **Retrieved:** 2026-10-14
+  (1.1–1.3s used, with backoff on 503/429). Every lookup cached to
+  `data/raw/mb_artist_cache.jsonl` (resumable); the unmatched set re-queried into the same
+  cache. Unmatched artists kept with `matched=false` + empty tags.
+- **Retrieved:** 2026-10-14 (unmatched re-queried with normalized names 2026-10-14)
 
 ---
 

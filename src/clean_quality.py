@@ -324,10 +324,12 @@ AGGREGATE_GENRES = [
     "Hip-Hop/Rap",
     "R&B/Soul",
     "Country",
+    "Latin",
     "Dance/Electronic",
     "Folk",
     "Jazz",
     "Blues",
+    "Metal",
     "Other/Unknown",
 ]
 
@@ -406,26 +408,38 @@ def _is_noise(tag: str) -> bool:
 # bucket's keywords is assigned to the FIRST (highest-precedence) bucket, so a
 # specific genre always beats the catch-all "pop". Precedence, high -> low:
 #
-#   Hip-Hop/Rap > Country > R&B/Soul > Dance/Electronic > Folk > Jazz > Blues
-#   > Rock > Pop
+#   Metal > Hip-Hop/Rap > Country > Latin > R&B/Soul > Dance/Electronic > Folk
+#   > Jazz > Blues > Rock > Pop
 #
 # Rationale: "pop" is the default label slapped on almost everyone, so any more
 # specific tag should win. "country pop" -> Country, "pop rap" -> Hip-Hop/Rap,
-# "pop soul" -> R&B/Soul, "dance-pop" -> Dance/Electronic, "folk pop" -> Folk.
-# Rock sits just above Pop (more specific than pop, less than the niche genres),
-# so "pop rock" -> Rock but "country rock" -> Country, "folk rock" -> Folk,
-# "blues rock" -> Blues (those earlier buckets win on order).
+# "pop soul" -> R&B/Soul, "dance-pop" -> Dance/Electronic, "folk pop" -> Folk,
+# "latin pop" -> Latin. Rock sits just above Pop (more specific than pop, less
+# than the niche genres), so "pop rock" -> Rock but "country rock" -> Country,
+# "folk rock" -> Folk, "blues rock" -> Blues (those earlier buckets win on order).
+# Metal sits at the top so a metal subgenre top tag ("nu metal", "metalcore")
+# lands in Metal, NOT Rock (metal was previously a Rock keyword and absorbed).
 #
 # Disco & funk FOLD INTO Dance/Electronic and R&B/Soul respectively (documented
-# choice): disco is a dance-floor genre, funk is a soul/R&B lineage. Latin,
-# reggae, and metal did not have the tag volume to justify their own aggregate
-# bucket in this corpus, so they fall through to Other/Unknown.
+# choice): disco is a dance-floor genre, funk is a soul/R&B lineage. **Latin** and
+# **Metal** now have their own aggregate buckets (owner decision 2026-10-14):
+# Latin recovers reggaeton/Latin-pop/salsa chart presence previously dumped in
+# Other, and Metal is broken out of Rock so metal acts read as Metal. Reggae still
+# lacks the tag volume to justify a bucket in this corpus and falls to Other.
 _BUCKET_RULES: list[tuple[str, tuple[str, ...]]] = [
+    ("Metal", (
+        "metal", "thrash", "metalcore", "djent", "grindcore", "deathcore",
+    )),
     ("Hip-Hop/Rap", (
         "hip hop", "rap", "trap", "grime", "drill", "crunk", "g-funk",
     )),
     ("Country", (
         "country", "bluegrass", "americana", "honky", "nashville", "western swing",
+    )),
+    ("Latin", (
+        "latin", "reggaeton", "salsa", "bachata", "merengue", "regional mexican",
+        "ranchera", "mariachi", "cumbia", "banda", "norteno", "norteño", "tejano",
+        "bossa nova", "samba", "corrido",
     )),
     ("R&B/Soul", (
         "r&b", "soul", "funk", "motown", "new jack swing", "quiet storm",
@@ -446,7 +460,7 @@ _BUCKET_RULES: list[tuple[str, tuple[str, ...]]] = [
         "blues", "rhythm and blues",  # (already normalized to r&b, kept as guard)
     )),
     ("Rock", (
-        "rock", "grunge", "punk", "metal", "new wave", "britpop", "indie",
+        "rock", "grunge", "punk", "new wave", "britpop", "indie",
         "alternative", "emo",
     )),
     ("Pop", (
@@ -505,10 +519,12 @@ def bucket_genre(tags: Any) -> str:
     Pop runs larger and the roots genres smaller than a lineage-based taxonomy would.
 
     PRECEDENCE (tiebreaker only, high → low):
-        Hip-Hop/Rap > Country > R&B/Soul > Dance/Electronic > Folk > Jazz
-        > Blues > Rock > Pop > Other/Unknown
+        Metal > Hip-Hop/Rap > Country > Latin > R&B/Soul > Dance/Electronic
+        > Folk > Jazz > Blues > Rock > Pop > Other/Unknown
     Disco folds into Dance/Electronic and funk into R&B/Soul (documented).
-    Latin/reggae/metal lack the tag volume for their own bucket and fall to Other.
+    Latin and Metal are their own aggregate buckets (owner decision 2026-10-14):
+    Latin recovers reggaeton/Latin-pop/salsa; Metal is broken out of Rock. Reggae
+    still lacks the tag volume for its own bucket and falls to Other/Unknown.
 
     Args:
         tags: JSON string, list[dict{name,count}], or list[str] of raw MB tags.

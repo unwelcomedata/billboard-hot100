@@ -420,6 +420,158 @@ _MB_HEADERS = {
 }
 
 
+# ---------------------------------------------------------------------------
+# Billboard credit → MusicBrainz artist-name normalization
+# ---------------------------------------------------------------------------
+#
+# MusicBrainz keys on an artist's CANONICAL name. Billboard credit strings carry
+# featuring/backing-band/collaboration formatting ("Elvis Presley With The
+# Jordanaires", "Prince And The Revolution", "Drake & 21 Savage") that never match
+# MB's canonical name, so the first enrichment pass left 1,281 of 4,427 artists
+# unmatched. `normalize_artist_for_mb()` derives the PRIMARY artist from a credit
+# string for a cleaner MB lookup:
+#
+#   1. Cut featuring/with/backing credits at the first join token
+#      (" feat.", " featuring", " with", " duet", " vs", " x ", "starring", "&
+#      his/her", "and his/her", etc.).
+#   2. Split a remaining collaboration on " & ", " and ", ",", "/", " + " and take
+#      the FIRST (primary) artist. For a true co-bill ("Drake & 21 Savage") this
+#      takes the primary ("Drake") — the right call for an ARTIST-LEVEL genre, and
+#      a deliberately documented choice (SOURCES.md).
+#   3. Strip trailing backing-band / orchestra tails ("His Orchestra", "And The
+#      Vandellas", "His Twangy Guitar And The Rebels", "(Vocal By ...)").
+#   4. Strip a leading "The ".
+#
+# A small CURATED ALIAS MAP handles the stubborn high-appearance names that
+# cleaning alone can't fix (digit/word, punctuation, or outright different canonical
+# names). It is applied to the ORIGINAL Billboard string BEFORE normalization and
+# short-circuits the result. Each entry was verified to resolve on MB before adding.
+
+# Applied to the ORIGINAL Billboard credit (exact, case-insensitive) and used verbatim.
+#
+# NOTE: alias values are fed to the forgiving UNQUOTED MB query (quoted=False), so
+# they only need to be close enough to score the right artist first — each was
+# verified to resolve to the intended artist on MB before adding.
+_MB_ALIAS_MAP: dict[str, str] = {
+    "daryl hall john oates": "Daryl Hall & John Oates",
+    "'n sync": "*NSYNC",
+    "jackson 5": "The Jackson 5",
+    "the 4 seasons": "The Four Seasons",
+    "ke$ha": "Kesha",
+    "thirty eight special": ".38 Special",
+    "dixie chicks": "The Chicks",
+}
+
+# Join tokens that introduce a FEATURING / backing / co-bill credit. The primary
+# artist is everything BEFORE the first of these (word-boundary, case-insensitive).
+_MB_CUT_PATTERNS = [
+    r"\s+feat\.?\s+",
+    r"\s+featuring\s+",
+    r"\s+ft\.?\s+",
+    r"\s+with\s+",
+    r"\s+duet\s+with\s+",
+    r"\s+duet\s+",
+    r"\s+vs\.?\s+",
+    r"\s+x\s+",
+    r"\s+starring\s+",
+    r"\s+presents\s+",
+    r"\s+introducing\s+",
+    r"\s+&\s+his\s+",
+    r"\s+&\s+her\s+",
+    r"\s+and\s+his\s+",
+    r"\s+and\s+her\s+",
+]
+_MB_CUT_RE = __import__("re").compile("|".join(_MB_CUT_PATTERNS), __import__("re").IGNORECASE)
+
+# Trailing orchestra / vocal-credit tails to strip from the primary artist. We
+# deliberately strip ONLY the "His/Her Orchestra/Band" and "(Vocal By ...)" style
+# session-credit tails — NOT "& The <Band>" / "And The <Band>", because for Motown-
+# era acts the full "<Lead> & The <Group>" IS the canonical MusicBrainz name
+# ("Martha & The Vandellas", "Diana Ross & The Supremes", "Gladys Knight & The
+# Pips"). Those are handled by the co-bill split guard below, which keeps a
+# "& The ..." group intact and only splits a true two-artist co-bill.
+_MB_TAIL_RE = __import__("re").compile(
+    r"\s*\(vocal by.*?\)\s*$"                        # "(Vocal By ...)"
+    r"|\s+and\s+his\s+orchestra\s*$"                 # "And His Orchestra"
+    r"|\s+and\s+her\s+orchestra\s*$"
+    r"|\s+his\s+orchestra\s*$"                        # "His Orchestra"
+    r"|\s+her\s+orchestra\s*$"
+    r"|\s+his\s+.*\b(band|orchestra|rebels)\s*$"      # "His Twangy Guitar And The Rebels"
+    r"|\s+her\s+.*\b(band|orchestra)\s*$",
+    __import__("re").IGNORECASE,
+)
+
+# A trailing parenthetical ("Silk Sonic (Bruno Mars & Anderson .Paak)") — drop it,
+# keeping the act name before the paren.
+_MB_PAREN_RE = __import__("re").compile(r"\s*\(.*?\)\s*$")
+
+# Co-bill separators. We split on these and keep the FIRST (primary) artist — BUT
+# only when the SECOND side is itself a standalone artist, not a "The <Group>"
+# backing group (so "Diana Ross & The Supremes" stays whole, while "Marvin Gaye &
+# Tammi Terrell" and "Drake & 21 Savage" reduce to the primary).
+_MB_COBILL_RE = __import__("re").compile(
+    r"\s+&\s+(?!the\s)|\s+and\s+(?!the\s|his\s|her\s)|\s*,\s*|\s*/\s*|\s+\+\s+",
+    __import__("re").IGNORECASE,
+)
+
+
+def normalize_artist_for_mb(raw: str) -> str:
+    """Derive the PRIMARY artist from a Billboard credit string for MB lookup.
+
+    See the module comment above for the full rationale. Returns a cleaned,
+    canonical-ish artist name; an exact curated alias short-circuits everything.
+
+    Examples:
+        "Elvis Presley With The Jordanaires"            -> "Elvis Presley"
+        "Prince And The Revolution"                     -> "Prince"            (co-bill cut)
+        "Drake & 21 Savage"                             -> "Drake"
+        "Paul McCartney And Wings"                      -> "Paul McCartney"
+        "Marvin Gaye & Tammi Terrell"                   -> "Marvin Gaye"
+        "Diana Ross & The Supremes"                     -> "Diana Ross & The Supremes" (kept whole)
+        "The Weeknd & Ariana Grande"                    -> "The Weeknd"
+        "Daryl Hall John Oates"                         -> "Hall & Oates"      (alias)
+        "Jackson 5"                                     -> "The Jackson 5"     (alias)
+    """
+    import re
+
+    if not raw:
+        return ""
+    s = re.sub(r"\s+", " ", str(raw)).strip()
+
+    # 1. Curated alias (exact, case-insensitive) short-circuits.
+    alias = _MB_ALIAS_MAP.get(s.lower())
+    if alias:
+        return alias
+
+    # 2. Cut at the first featuring/with/co-bill-credit token ("feat.", "with",
+    #    "& his", "and her", "starring", ...). This removes session/guest credits
+    #    like "... Featuring Mark Lindsay" and "Paul McCartney And Wings"
+    #    ("and his/her" is in the cut set; "And Wings" is a plain "and" → handled
+    #    by the co-bill split in step 5).
+    m = _MB_CUT_RE.search(s)
+    if m:
+        s = s[: m.start()].strip()
+
+    # 3. Drop a trailing parenthetical.
+    s = _MB_PAREN_RE.sub("", s).strip()
+
+    # 4. Strip an orchestra / session-band tail (NOT "& The <Group>").
+    prev = None
+    while prev != s:
+        prev = s
+        s = _MB_TAIL_RE.sub("", s).strip()
+
+    # 5. Split a true co-bill and keep the FIRST (primary) artist. A trailing
+    #    "& The <Group>" / "and his/her ..." is NOT a co-bill separator here
+    #    (negative lookahead), so Motown "<Lead> & The <Group>" names stay whole.
+    #    "Paul McCartney And Wings" -> "Paul McCartney" (Wings is a plain "and").
+    parts = [p.strip() for p in _MB_COBILL_RE.split(s) if p.strip()]
+    if len(parts) > 1:
+        s = parts[0]
+
+    return s or str(raw).strip()
+
+
 def artist_appearance_counts(df_hot100: pd.DataFrame) -> pd.DataFrame:
     """Count total Hot 100 chart appearances per (Billboard-spelling) artist.
 
@@ -437,14 +589,27 @@ def artist_appearance_counts(df_hot100: pd.DataFrame) -> pd.DataFrame:
 
 
 def _mb_fetch_artist(name: str, rate_limit_seconds: float = 1.1,
-                     max_retries: int = 4) -> dict:
+                     max_retries: int = 4, query_name: str | None = None,
+                     quoted: bool = True) -> dict:
     """Query MusicBrainz for the top artist match and return its raw tag list.
 
-    Returns a dict: {artist, mb_artist_id, mb_name, tags (list of {name,count}),
-    matched (bool)}. On no match, matched=False with empty tags. Rate-limited
-    with exponential backoff on 429/5xx.
+    The cache record is keyed by the ORIGINAL Billboard `name` (so downstream joins
+    still work), but the MusicBrainz query uses `query_name` when supplied — the
+    normalized primary-artist name — and records it as `query_name` for auditability.
+
+    `quoted` controls the Lucene query form. `artist:"<name>"` (quoted=True, the
+    original ingest behavior) demands a near-exact name and misses credit-formatted
+    strings; `artist:<name>` (quoted=False) is a forgiving fuzzy search that returns
+    a score-ranked list — far better for the re-query of unmatched artists, so the
+    re-query path passes quoted=False and takes the top (highest-score) match.
+
+    Returns a dict: {artist, query_name, mb_artist_id, mb_name,
+    tags (list of {name,count}), matched (bool)}. On no match, matched=False with
+    empty tags. Rate-limited with exponential backoff on 429/5xx.
     """
-    params = {"query": f'artist:"{name}"', "fmt": "json", "limit": 1}
+    q = query_name if query_name else name
+    query = f'artist:"{q}"' if quoted else f"artist:{q}"
+    params = {"query": query, "fmt": "json", "limit": 1}
     time.sleep(rate_limit_seconds)
     for attempt in range(max_retries + 1):
         resp = requests.get(
@@ -460,19 +625,20 @@ def _mb_fetch_artist(name: str, rate_limit_seconds: float = 1.1,
         data = resp.json()
         artists = data.get("artists", [])
         if not artists:
-            return {"artist": name, "mb_artist_id": None, "mb_name": None,
-                    "tags": [], "matched": False}
+            return {"artist": name, "query_name": q, "mb_artist_id": None,
+                    "mb_name": None, "tags": [], "matched": False}
         top = artists[0]
         return {
             "artist": name,
+            "query_name": q,
             "mb_artist_id": top.get("id"),
             "mb_name": top.get("name"),
             "tags": top.get("tags", []) or [],
             "matched": True,
         }
     resp.raise_for_status()
-    return {"artist": name, "mb_artist_id": None, "mb_name": None,
-            "tags": [], "matched": False}
+    return {"artist": name, "query_name": q, "mb_artist_id": None,
+            "mb_name": None, "tags": [], "matched": False}
 
 
 def _load_mb_cache(cache_path: Path) -> dict[str, dict]:
@@ -487,6 +653,108 @@ def _load_mb_cache(cache_path: Path) -> dict[str, dict]:
                 rec = json.loads(line)
                 cached[rec["artist"]] = rec
     return cached
+
+
+def requery_unmatched_mb(
+    cfg: dict,
+    cache_filename: str = "mb_artist_cache.jsonl",
+    rate_limit_seconds: float = 1.1,
+    progress_every: int = 25,
+    max_fetch: int | None = None,
+) -> dict[str, int]:
+    """Re-query the currently-UNMATCHED cached artists with normalized names.
+
+    Reads the resumable cache (`data/raw/mb_artist_cache.jsonl`), finds every artist
+    whose latest record is `matched=False`, derives a cleaner MusicBrainz query via
+    `normalize_artist_for_mb()` (primary-artist extraction + curated alias map), and
+    re-queries ONLY those. Each result is APPENDED to the same JSONL cache keyed by
+    the ORIGINAL Billboard artist name — so `_load_mb_cache` (last-line-wins) picks up
+    the improved record and the downstream join is unaffected. The normalized
+    `query_name` is recorded on every new record for auditability.
+
+    Fully RESUMABLE: a record is only re-queried if its latest cache state is still
+    unmatched AND the normalized name actually differs from a query already tried for
+    it. Rate-limited (>=1.1s); progress printed every `progress_every` artists.
+
+    Returns a summary dict: {unmatched_before, attempted, newly_matched, still_unmatched}.
+    """
+    cache_path = raw_path(cfg, cache_filename)
+    cached = _load_mb_cache(cache_path)
+
+    unmatched = {a: rec for a, rec in cached.items() if not rec.get("matched")}
+    print(f"→ cache has {len(cached):,} artists; {len(unmatched):,} currently unmatched")
+
+    # Build the re-query list. We re-attempt EVERY still-unmatched artist, because
+    # the re-query differs from the original pass in TWO ways that both help:
+    #   (a) the query NAME is the normalized primary-artist (credit stripping + alias), and
+    #   (b) the query FORM switches from exact-quoted to a forgiving unquoted Lucene
+    #       search (quoted=False in the fetch) that returns a score-ranked match.
+    # So even an artist whose normalized name == its raw name is worth re-querying,
+    # since the forgiving query form alone often resolves it. A record that was ALREADY
+    # re-queried in a prior resumable pass (its latest cache line carries query_name and
+    # is still unmatched) is skipped so repeated runs don't re-hammer dead names.
+    to_requery: list[tuple[str, str]] = []  # (original billboard name, normalized query)
+    skipped_already_requeried = 0
+    for name, rec in unmatched.items():
+        if rec.get("query_name"):
+            # Already went through a normalized re-query in a prior pass and still
+            # didn't match — don't keep retrying a confirmed dead end.
+            skipped_already_requeried += 1
+            continue
+        to_requery.append((name, normalize_artist_for_mb(name)))
+
+    if skipped_already_requeried:
+        print(f"→ {skipped_already_requeried:,} unmatched artists skipped "
+              f"(already re-queried with a normalized name in a prior pass — confirmed no match)")
+
+    if max_fetch is not None:
+        to_requery = to_requery[:max_fetch]
+
+    print(f"→ re-querying {len(to_requery):,} unmatched artists with normalized names "
+          f"+ forgiving query (~{len(to_requery) * rate_limit_seconds / 60:.0f}+ min "
+          f"at {rate_limit_seconds}s each)")
+
+    newly_matched = 0
+    transient_skipped = 0
+    with open(cache_path, "a", encoding="utf-8") as cache_f:
+        for i, (name, norm) in enumerate(to_requery, 1):
+            try:
+                rec = _mb_fetch_artist(
+                    name, rate_limit_seconds=rate_limit_seconds, query_name=norm,
+                    quoted=False, max_retries=6,
+                )
+            except Exception as e:  # noqa: BLE001 — transient network/5xx after retries
+                # Do NOT write a record on a transient failure — leaving it absent
+                # of a new query_name means a resumed run will retry it rather than
+                # permanently marking a (possibly matchable) artist as a dead end.
+                print(f"    ⚠ transient re-query failure for {name!r} (as {norm!r}), "
+                      f"will retry on resume: {e}")
+                transient_skipped += 1
+                continue
+            cache_f.write(json.dumps(rec, ensure_ascii=False) + "\n")
+            cache_f.flush()
+            cached[name] = rec
+            if rec.get("matched"):
+                newly_matched += 1
+            if i % progress_every == 0 or i == len(to_requery):
+                print(f"  [{i:>5}/{len(to_requery)}] re-queried "
+                      f"(newly matched so far: {newly_matched})")
+
+    if transient_skipped:
+        print(f"→ {transient_skipped:,} artists hit transient failures and were "
+              f"left for a resume pass (not marked unmatched)")
+
+    still_unmatched = sum(1 for a, rec in cached.items() if not rec.get("matched"))
+    summary = {
+        "unmatched_before": len(unmatched),
+        "attempted": len(to_requery),
+        "newly_matched": newly_matched,
+        "still_unmatched": still_unmatched,
+    }
+    print(f"\n→ re-query done: attempted {summary['attempted']:,}, "
+          f"newly matched {summary['newly_matched']:,}; "
+          f"{summary['still_unmatched']:,} still unmatched in cache")
+    return summary
 
 
 def ingest_musicbrainz_genres(
