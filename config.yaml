@@ -15,17 +15,23 @@ settings:
   duckdb_file: data/project.duckdb   # single file DB for the project
 
 sources:
-  # Define each data source here before ingesting.
-  # url:        full URL to fetch
-  # type:       html_table | html_scrape | csv | json
-  # table_index: (html_table only) zero-based index of the target <table>
-  # js_render:  true if the page requires Playwright (JS-rendered)
-  # Example:
-  # fatalities:
-  #   url: https://example.gov/data/fatalities
-  #   type: html_table
-  #   table_index: 0
-  #   js_render: false
+  # 1. Billboard Hot 100 full chart history — every weekly chart 1958-08-04 → present
+  #    (one JSON array of chart objects; keyless raw-GitHub download, updated daily).
+  #    Schema: [{date, data:[{song, artist, this_week, last_week, peak_position, weeks_on_chart}]}]
+  hot100_all:
+    url: https://raw.githubusercontent.com/mhollingshead/billboard-hot-100/main/all.json
+    type: json
+    publisher: "mhollingshead/billboard-hot-100 (GitHub) — crawl of Billboard.com Hot 100"
+    license: "public GitHub data; underlying chart © Billboard — used for non-commercial research"
+
+  # 2. Genre enrichment — MusicBrainz artist tags (keyless; rate-limit >= 1 req/sec).
+  #    Billboard carries NO genre, so genre is derived at the ARTIST level from MB tags,
+  #    then bucketed to aggregate genres in 02-clean. Queried per unique artist in ingest.
+  musicbrainz_artist:
+    url: "https://musicbrainz.org/ws/2/artist"
+    type: json
+    publisher: "MusicBrainz (keyless Web Service v2)"
+    license: "MusicBrainz data under CC0 / CC-BY-NC-SA; see musicbrainz.org/doc/About/Data_License"
 
 export:
   formats:
