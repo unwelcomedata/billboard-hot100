@@ -12,6 +12,8 @@ but the heavy lifting happens inside DuckDB.
 
 from __future__ import annotations
 
+import json
+import re
 from pathlib import Path
 from typing import Any
 
@@ -299,3 +301,308 @@ def save_processed(df: pd.DataFrame, cfg: dict[str, Any], filename: str) -> Path
     df.to_parquet(out, index=False, engine=cfg["settings"]["parquet_engine"])
     print(f"Saved processed → {out}  ({len(df):,} rows)")
     return out
+
+
+# ===========================================================================
+# Genre bucketing — raw MusicBrainz tags  →  a small aggregate-genre set
+# ===========================================================================
+#
+# Billboard carries no genre; 01-ingest stored per-ARTIST MusicBrainz tags RAW
+# (a messy mix: "pop", "pop rock", "dance-pop", plus noise like "american",
+# "2010s", "female vocals", "2008 universal fire victim"). This section collapses
+# that tag soup down to ONE aggregate genre per artist, deterministically.
+#
+# The mapping is the real deliverable and is INDEPENDENT of which artists happen
+# to be cached yet: an artist with no usable tags (not matched / not cached /
+# only-noise tags) buckets to "Other/Unknown", so re-running after the full MB
+# pull changes only the Other/Unknown share, never the rule set.
+
+# Canonical aggregate-genre set (the only values bucket_genre can return).
+AGGREGATE_GENRES = [
+    "Pop",
+    "Rock",
+    "Hip-Hop/Rap",
+    "R&B/Soul",
+    "Country",
+    "Dance/Electronic",
+    "Folk",
+    "Jazz",
+    "Blues",
+    "Other/Unknown",
+]
+
+OTHER_UNKNOWN = "Other/Unknown"
+
+# --- Tag noise: things that are never a genre -------------------------------
+# Nationalities / places, decade tags, and role/junk tags. Filtered out BEFORE
+# bucketing so they can never influence the result.
+_NOISE_EXACT = {
+    # nationality / place
+    "american", "america", "usa", "us", "u.s.", "english", "british", "uk",
+    "u.k.", "britain", "canadian", "canada", "australian", "australia",
+    "irish", "ireland", "scottish", "welsh", "german", "germany", "french",
+    "france", "italian", "swedish", "sweden", "norwegian", "jamaican",
+    "jamaica", "latin american",
+    # role / descriptor junk (NOT a genre)
+    "singer-songwriter", "singer/songwriter", "singer songwriter",
+    "female vocals", "male vocals", "female vocalist", "male vocalist",
+    "icon", "legend", "ballad", "ballads", "christmas music", "holiday",
+    "seasonal", "cover", "covers", "instrumental", "vocal", "soundtrack",
+    "composer", "producer", "band", "duo", "group", "trio", "solo",
+    "2008 universal fire victim", "pop and chart", "classic pop and rock",
+    "rock and indie", "one-hit wonder", "various", "unknown",
+}
+# Substring markers that mark a tag as noise (decades, era buckets).
+_NOISE_SUBSTR = (
+    "19", "20", "'s", "fire victim", "vocal",
+)
+_DECADE_RE = re.compile(r"^\d{2,4}s$|^\d{4}$")
+
+
+def _normalize_tag(tag: str) -> str:
+    """Lowercase, strip, and unify spelling variants of a single tag.
+
+    Collapses the common synonym clusters so one concept = one token:
+      r&b / rnb / rhythm & blues / rhythm and blues  -> "r&b"
+      synthpop / synth pop                            -> "synth-pop"
+      rock and roll / rock & roll                     -> "rock and roll"
+      hip-hop                                         -> "hip hop"
+    """
+    t = tag.strip().lower()
+    t = t.replace("&", " and ")          # "r&b" -> "r and b", normalized below
+    t = re.sub(r"[/_]", " ", t)          # slashes/underscores -> space
+    t = re.sub(r"\s+", " ", t).strip()
+    # synonym unification
+    t = re.sub(r"\brhythm and blues\b", "r and b", t)
+    t = re.sub(r"\brnb\b", "r and b", t)
+    t = t.replace("r and b", "r&b")
+    t = t.replace("hip-hop", "hip hop")
+    t = t.replace("synthpop", "synth-pop")
+    t = t.replace("synth pop", "synth-pop")
+    t = t.replace("rock and roll", "rock and roll")
+    t = t.replace("rock n roll", "rock and roll")
+    return t
+
+
+def _is_noise(tag: str) -> bool:
+    """True if a normalized tag carries no genre signal (place/decade/role/junk)."""
+    if not tag:
+        return True
+    if tag in _NOISE_EXACT:
+        return True
+    if _DECADE_RE.match(tag):
+        return True
+    # pure decade / era tokens like "80s", "2010s", "2008 universal fire victim"
+    for marker in _NOISE_SUBSTR:
+        if marker in tag:
+            return True
+    return False
+
+
+# --- Bucket keyword rules ---------------------------------------------------
+# Each aggregate bucket owns a set of substring keywords. A normalized tag is
+# scored into a bucket if ANY of the bucket's keywords is a substring of it.
+# The ORDER of this list IS the precedence: a tag that matches more than one
+# bucket's keywords is assigned to the FIRST (highest-precedence) bucket, so a
+# specific genre always beats the catch-all "pop". Precedence, high -> low:
+#
+#   Hip-Hop/Rap > Country > R&B/Soul > Dance/Electronic > Folk > Jazz > Blues
+#   > Rock > Pop
+#
+# Rationale: "pop" is the default label slapped on almost everyone, so any more
+# specific tag should win. "country pop" -> Country, "pop rap" -> Hip-Hop/Rap,
+# "pop soul" -> R&B/Soul, "dance-pop" -> Dance/Electronic, "folk pop" -> Folk.
+# Rock sits just above Pop (more specific than pop, less than the niche genres),
+# so "pop rock" -> Rock but "country rock" -> Country, "folk rock" -> Folk,
+# "blues rock" -> Blues (those earlier buckets win on order).
+#
+# Disco & funk FOLD INTO Dance/Electronic and R&B/Soul respectively (documented
+# choice): disco is a dance-floor genre, funk is a soul/R&B lineage. Latin,
+# reggae, and metal did not have the tag volume to justify their own aggregate
+# bucket in this corpus, so they fall through to Other/Unknown.
+_BUCKET_RULES: list[tuple[str, tuple[str, ...]]] = [
+    ("Hip-Hop/Rap", (
+        "hip hop", "rap", "trap", "grime", "drill", "crunk", "g-funk",
+    )),
+    ("Country", (
+        "country", "bluegrass", "americana", "honky", "nashville", "western swing",
+    )),
+    ("R&B/Soul", (
+        "r&b", "soul", "funk", "motown", "new jack swing", "quiet storm",
+        "doo-wop", "doo wop", "gospel",
+    )),
+    ("Dance/Electronic", (
+        "dance", "electronic", "electro", "house", "techno", "edm", "disco",
+        "trance", "dubstep", "synth-pop", "eurodance", "club", "hi-nrg",
+        "freestyle",
+    )),
+    ("Folk", (
+        "folk", "acoustic",
+    )),
+    ("Jazz", (
+        "jazz", "swing", "bebop", "big band",
+    )),
+    ("Blues", (
+        "blues", "rhythm and blues",  # (already normalized to r&b, kept as guard)
+    )),
+    ("Rock", (
+        "rock", "grunge", "punk", "metal", "new wave", "britpop", "indie",
+        "alternative", "emo",
+    )),
+    ("Pop", (
+        "pop", "adult contemporary", "easy listening",
+    )),
+]
+
+
+def _bucket_for_tag(norm_tag: str) -> str | None:
+    """Return the aggregate bucket for ONE normalized tag, or None if no rule fires.
+
+    Walks _BUCKET_RULES in precedence order and returns the first bucket whose
+    keyword set has a substring hit in the tag — so "country pop" matches Country
+    (checked before Pop) and "pop rock" matches Rock (checked before Pop).
+    """
+    for bucket, keywords in _BUCKET_RULES:
+        for kw in keywords:
+            if kw in norm_tag:
+                return bucket
+    return None
+
+
+def bucket_genre(tags: Any) -> str:
+    """Collapse an artist's raw MusicBrainz tag list to ONE aggregate genre.
+
+    This is the canonical genre-bucketing rule for billboard-hot100. It is
+    deterministic and independent of enrichment coverage: an artist with no
+    usable tags returns "Other/Unknown".
+
+    Algorithm:
+      1. Parse `tags` (a JSON string, a list of {name, count} dicts, or a list of
+         strings) into (tag, count) pairs. A missing/zero/negative count counts
+         as weight 1 (MB counts are up/down-votes; we only use them to break ties
+         between competing buckets, not to discard a tag).
+      2. Normalize each tag (lowercase, unify r&b/rnb, synth-pop, etc.) and DROP
+         noise tags (nationalities, decades, roles/junk).
+      3. Map each surviving tag to a bucket via ordered keyword rules
+         (_BUCKET_RULES). Accumulate each tag's weight into its bucket AND track
+         the best (lowest) precedence index seen per bucket.
+      4. Pick the winning bucket by: highest accumulated weight, then — on a tie —
+         the higher-precedence bucket (specific genres beat the catch-all Pop).
+      5. No bucket matched / only-noise tags / empty -> "Other/Unknown".
+
+    PRECEDENCE (high → low), the core judgment call:
+        Hip-Hop/Rap > Country > R&B/Soul > Dance/Electronic > Folk > Jazz
+        > Blues > Rock > Pop > Other/Unknown
+    so e.g. "country pop" → Country, "pop rap" → Hip-Hop/Rap, "pop soul" →
+    R&B/Soul, "dance-pop" → Dance/Electronic, "pop rock" → Rock. Disco folds into
+    Dance/Electronic and funk into R&B/Soul (documented). Latin/reggae/metal lack
+    the tag volume for their own bucket and fall to Other/Unknown.
+
+    Args:
+        tags: JSON string, list[dict{name,count}], or list[str] of raw MB tags.
+
+    Returns:
+        One of AGGREGATE_GENRES.
+    """
+    # 1. Parse into (name, count) pairs ------------------------------------
+    if tags is None:
+        return OTHER_UNKNOWN
+    if isinstance(tags, str):
+        tags = tags.strip()
+        if not tags:
+            return OTHER_UNKNOWN
+        try:
+            tags = json.loads(tags)
+        except (ValueError, TypeError):
+            return OTHER_UNKNOWN
+    if not isinstance(tags, (list, tuple)) or len(tags) == 0:
+        return OTHER_UNKNOWN
+
+    pairs: list[tuple[str, int]] = []
+    for item in tags:
+        if isinstance(item, dict):
+            name = item.get("name", "")
+            cnt = item.get("count", 0) or 0
+        else:
+            name, cnt = str(item), 0
+        try:
+            cnt = int(cnt)
+        except (ValueError, TypeError):
+            cnt = 0
+        weight = cnt if cnt and cnt > 0 else 1  # tie-break weight; floor at 1
+        if name:
+            pairs.append((name, weight))
+
+    if not pairs:
+        return OTHER_UNKNOWN
+
+    # 2–3. Normalize, drop noise, map to buckets, accumulate ----------------
+    _prec = {bucket: i for i, (bucket, _) in enumerate(_BUCKET_RULES)}
+    bucket_weight: dict[str, int] = {}
+    bucket_best_prec: dict[str, int] = {}
+    for name, weight in pairs:
+        norm = _normalize_tag(name)
+        if _is_noise(norm):
+            continue
+        bucket = _bucket_for_tag(norm)
+        if bucket is None:
+            continue
+        bucket_weight[bucket] = bucket_weight.get(bucket, 0) + weight
+        bucket_best_prec[bucket] = min(
+            bucket_best_prec.get(bucket, 999), _prec[bucket]
+        )
+
+    if not bucket_weight:
+        return OTHER_UNKNOWN
+
+    # 4. Winner: max accumulated weight, ties broken by precedence (lower = better)
+    winner = max(
+        bucket_weight,
+        key=lambda b: (bucket_weight[b], -bucket_best_prec[b]),
+    )
+    return winner
+
+
+def genre_fields(tags: Any) -> tuple[str, int, str]:
+    """Return (genre, n_tags, top_tags) for an artist's raw tag list.
+
+    Convenience companion to bucket_genre() used by 02-clean to build the
+    `artist_genre` table in one pass:
+      - genre    : the aggregate bucket (bucket_genre).
+      - n_tags   : number of NON-NOISE tags that survived normalization.
+      - top_tags : the raw tag names (comma-joined, highest MB count first),
+                   kept verbatim for auditability.
+    """
+    genre = bucket_genre(tags)
+
+    # Parse again (cheap) for the audit fields.
+    parsed = tags
+    if isinstance(parsed, str):
+        try:
+            parsed = json.loads(parsed) if parsed.strip() else []
+        except (ValueError, TypeError):
+            parsed = []
+    if not isinstance(parsed, (list, tuple)):
+        parsed = []
+
+    named: list[tuple[str, int]] = []
+    n_signal = 0
+    for item in parsed:
+        if isinstance(item, dict):
+            name = item.get("name", "")
+            cnt = item.get("count", 0) or 0
+        else:
+            name, cnt = str(item), 0
+        try:
+            cnt = int(cnt)
+        except (ValueError, TypeError):
+            cnt = 0
+        if not name:
+            continue
+        named.append((name, cnt))
+        if not _is_noise(_normalize_tag(name)):
+            n_signal += 1
+
+    named.sort(key=lambda x: x[1], reverse=True)
+    top_tags = ", ".join(n for n, _ in named)
+    return genre, n_signal, top_tags
