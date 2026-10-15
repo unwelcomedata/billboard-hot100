@@ -65,8 +65,8 @@ acceptable for this tier and cited plainly below.
 - **Coverage:** every weekly Hot 100 chart, 1958-08-04 → present (3,559 charts /
   355,887 chart appearances at retrieval).
 - **How the source collects the data:** scraped/crawled from Billboard.com's published
-  Hot 100 and serialized to one JSON array. We land it verbatim and only flatten the
-  nested weekly `data` lists into long rows (one row per date × song × artist).
+  Hot 100 and serialized to one JSON array. It is taken verbatim and only flattened — the
+  nested weekly lists become long rows (one row per date × song × artist).
 - **How the source defines the data:** "chart presence" = a song appearing in that
   week's Hot 100 at the given rank. `this_week` is the rank that week (1 = top);
   `peak_position` and `weeks_on_chart` are Billboard's running fields.
@@ -93,8 +93,8 @@ acceptable for this tier and cited plainly below.
   chart-rule changes (e.g. the 2013 streaming inclusion, the 2018–2020 video/bundle
   adjustments). Load-bearing here: the streaming era both reshaped the genre mix and let
   songs stay on the chart far longer (pre-2013 max ~87 weeks vs ~112 in the streaming era).
-- **Notes:** `last_week` is null for a song's first chart week. Raw file cached to
-  `data/raw/hot100_all.json`.
+- **Notes:** `last_week` is null for a song's first chart week. The full raw JSON is
+  retained verbatim.
 - **Retrieved:** 2026-10-14
 
 ### MusicBrainz artist tags (genre enrichment)
@@ -112,13 +112,14 @@ acceptable for this tier and cited plainly below.
 - **How the source defines the data:** a "tag" is a free-text label editors attach to an
   artist (e.g. `pop`, `country`, `synth-pop`), with a `count` = how many editors applied
   it. Tags are **artist-level and whole-catalog**, not per-song or point-in-time. They
-  are intentionally stored raw and messy here; bucketing to aggregate genres is `02-clean`.
+  are retained raw and messy as collected; a separate cleaning pass buckets them to the
+  twelve aggregate genres (top-tag-wins).
 - **Artist-name normalization (matching method, documented):** Billboard credit strings
   carry featuring / backing-band / collaboration formatting ("Elvis Presley With The
   Jordanaires", "Prince And The Revolution", "Drake & 21 Savage", "Paul McCartney And
   Wings") that does not match a MusicBrainz **canonical** artist name, so a first pass
   querying the raw credit with an exact-quoted search left ~1,281 of 4,427 artists
-  unmatched. We added `normalize_artist_for_mb()` (`src/ingest.py`) which derives the
+  unmatched. A normalization step derives the
   **primary artist** for lookup: it cuts featuring/with/duet/vs credits, strips
   orchestra/session-band and parenthetical tails, and splits a true co-bill to the FIRST
   (primary) artist — while deliberately KEEPING Motown-style "<Lead> & The <Group>" names
@@ -126,7 +127,7 @@ acceptable for this tier and cited plainly below.
   co-bill ("Drake & 21 Savage") taking the primary ("Drake") is a conscious choice for an
   **artist-level** genre. The unmatched set is then re-queried with the normalized name and
   a **forgiving (unquoted) Lucene query** that returns a score-ranked match. A small
-  **curated alias map** (also in `src/ingest.py`) handles stubborn names cleaning alone
+  **curated alias map** handles stubborn names cleaning alone
   can't fix (e.g. `Daryl Hall John Oates`→`Daryl Hall & John Oates`, `'N Sync`→`*NSYNC`,
   `Jackson 5`→`The Jackson 5`, `The 4 Seasons`→`The Four Seasons`, `Dixie Chicks`→`The
   Chicks`); each alias was verified to resolve to the intended artist on MB before adding.
@@ -147,16 +148,15 @@ acceptable for this tier and cited plainly below.
 - **Known controversies / debates:** tag quality varies by artist popularity; obscure
   artists may have few or no tags. Fun-tier crowd source — acceptable and cited plainly.
 - **Notes:** descriptive `User-Agent` required (else 403); rate-limited to ~1 req/sec
-  (1.1–1.3s used, with backoff on 503/429). Every lookup cached to
-  `data/raw/mb_artist_cache.jsonl` (resumable); the unmatched set re-queried into the same
-  cache. Unmatched artists kept with `matched=false` + empty tags.
+  (1.1–1.3s used, with backoff on 503/429). Every lookup is cached (resumable); the
+  unmatched set was re-queried into the same cache. Unmatched artists kept with empty tags.
 - **Retrieved:** 2026-10-14 (unmatched re-queried with normalized names 2026-10-14)
 
 ---
 
 ## Notes on Data Quality
 
-- All source files are saved verbatim to `data/raw/` and never modified.
+- All source files are retained verbatim as downloaded and never modified.
 - Discrepancies between sources should be noted here and resolved explicitly.
 - **Series breaks:** whenever a source changed its definition or method mid-series,
   document the break date under that source and treat pre/post as separate series —
@@ -164,14 +164,3 @@ acceptable for this tier and cited plainly below.
 - **Definitions drive comparisons:** before comparing two numbers (across years,
   places, or sources), confirm they are defined the same way. If not, say so in the
   chart, the codebook, and any social copy.
-
----
-
-## Source Provenance in DuckDB
-
-Every table in `data/project.duckdb` has a corresponding entry in the
-`_sources` metadata table:
-
-```sql
-SELECT * FROM _sources;
-```
