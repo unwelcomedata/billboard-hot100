@@ -70,15 +70,29 @@ acceptable for this tier and cited plainly below.
 - **How the source defines the data:** "chart presence" = a song appearing in that
   week's Hot 100 at the given rank. `this_week` is the rank that week (1 = top);
   `peak_position` and `weeks_on_chart` are Billboard's running fields.
+- **How the source defines the data (ranking inputs):** the Hot 100 ranks a song on a
+  **blended** metric — physical/digital **sales + radio airplay + online streaming
+  combined**. The weights of those three inputs have changed over time (see the series
+  break below), so "chart presence" is a moving measure, not a fixed one.
 - **Methodology changes / series breaks:** Billboard's Hot 100 ranking methodology
   shifted over the decades — historically sales + radio airplay; **digital downloads**
-  incorporated from ~2005; **online streaming** from ~2007 and progressively weighted
-  through the 2010s (on-demand / YouTube-era revisions). Chart presence is therefore
-  **not measured the same way across eras**; any genre-over-time comparison must carry
-  this caveat.
-- **Known controversies / debates:** periodic debate over streaming/airplay weighting
-  and chart-rule changes (e.g. bundle/streaming-count adjustments). Not load-bearing
-  for a genre-share view, but noted.
+  incorporated from ~2005; **online streaming** from ~2007. The load-bearing break for a
+  genre-over-time read is **2013: on-demand streaming was folded directly into the Hot 100
+  formula** (YouTube video streams added that year), and the streaming/video weighting +
+  bundle rules shifted again **~2018–2020** (paid vs ad-supported stream weighting, the
+  2020 end of merchandise/ticket bundles counting as sales). Chart presence is therefore
+  **not measured the same way across eras.** Interpretive consequence for this project:
+  the post-2013 surge of **Hip-Hop/Rap and Pop** (and the rise of long-running streaming-era
+  hits) is **partly real listening and partly an artifact of streaming favoring those
+  genres and rewarding long chart runs** — so cross-era genre comparisons, and the
+  pre-/post-2013 "longest-charting songs" split, carry this caveat. The 2013 break is
+  annotated directly on the year-axis charts (a dashed "2013: streaming added" marker) and
+  the pre-/post-song charts carry a short streaming-ramp caveat line; the categorical
+  decade share chart notes it in its subtitle.
+- **Known controversies / debates:** ongoing debate over streaming/airplay weighting and
+  chart-rule changes (e.g. the 2013 streaming inclusion, the 2018–2020 video/bundle
+  adjustments). Load-bearing here: the streaming era both reshaped the genre mix and let
+  songs stay on the chart far longer (pre-2013 max ~87 weeks vs ~112 in the streaming era).
 - **Notes:** `last_week` is null for a song's first chart week. Raw file cached to
   `data/raw/hot100_all.json`.
 - **Retrieved:** 2026-10-14

@@ -35,6 +35,13 @@ outputs/*
 !outputs/social/
 outputs/social/*
 !outputs/social/.gitkeep
+!outputs/web/
+outputs/web/*
+!outputs/web/.gitkeep
+
+# ── Genre dropdown picker (Pages) — regenerable via scripts/build_genre_pages.py ──
+docs/genres/
+docs/genres.html
 
 # ── Environment & secrets ─────────────────────────────────────────────────────
 .env
@@ -69,3 +76,6 @@ temp/
 # These assist development but are not part of the published dataset.
 artifacts/
 !artifacts/.gitkeep
+
+# ── Agent workflow task files (dev-only) ──────────────────────────────────────
+.agents/
