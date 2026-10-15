@@ -1,0 +1,189 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  @unwelcomedata — PROJECT INFOGRAPHIC (tall portrait poster)
+  Project: billboard-hot100
+  Bespoke, data-driven poster. Brand FRAME (header/footer/dividers) per
+  shared/infographic-frame-template.svg. Body hand-authored off the real data.
+  Canvas width fixed 1200; height grows to fit (final: 2240).
+  Genre colors are the project's canonical GENRE_COLORS (lead decade bump).
+-->
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="2240" viewBox="0 0 1200 2240" font-family="Helvetica, Arial, sans-serif">
+
+  <!-- ===== CANVAS ===== -->
+  <rect width="1200" height="2240" fill="#FBF8F0"/>
+
+  <!-- ============================================================= -->
+  <!-- HEADER BAND                                                   -->
+  <!-- ============================================================= -->
+  <rect x="0" y="0" width="1200" height="300" fill="#003049"/>
+  <text x="80" y="128" fill="#FFFFFF" font-size="60" font-weight="bold">How Genres Rose and Fell</text>
+  <text x="80" y="196" fill="#FFFFFF" font-size="60" font-weight="bold">on the Billboard Hot 100</text>
+  <text x="80" y="250" fill="#94D2BD" font-size="34" font-weight="bold">Seven decades of chart presence &#8212; and what streaming changed</text>
+
+  <!-- ============================================================= -->
+  <!-- SECTION 1 — THE RANK FLIP                                     -->
+  <!-- ============================================================= -->
+  <text x="80" y="400" fill="#003049" font-size="34" font-weight="bold">Rock ruled, then hip-hop took over</text>
+  <text x="80" y="434" fill="#6B7280" font-size="24">Rank of each genre by Hot 100 chart slots, per decade (#1 = most slots).</text>
+
+  <!-- rank grid: 6 decade columns x 6 ranks. One colored dot per decade per genre. -->
+  <!-- geometry: cols at x = 300,420,540,660,780,900 (decades 1970..2020); -->
+  <!-- rows at y = 540,590,640,690,740,790 (rank 1..6). dot r=15. -->
+
+  <!-- decade column headers -->
+  <text x="300" y="512" fill="#6B7280" font-size="21" font-weight="bold" text-anchor="middle">70s</text>
+  <text x="420" y="512" fill="#6B7280" font-size="21" font-weight="bold" text-anchor="middle">80s</text>
+  <text x="540" y="512" fill="#6B7280" font-size="21" font-weight="bold" text-anchor="middle">90s</text>
+  <text x="660" y="512" fill="#6B7280" font-size="21" font-weight="bold" text-anchor="middle">00s</text>
+  <text x="780" y="512" fill="#6B7280" font-size="21" font-weight="bold" text-anchor="middle">10s</text>
+  <text x="900" y="512" fill="#6B7280" font-size="21" font-weight="bold" text-anchor="middle">20s</text>
+
+  <!-- rank row labels (left) -->
+  <text x="250" y="548" fill="#6B7280" font-size="19" text-anchor="end">#1</text>
+  <text x="250" y="598" fill="#6B7280" font-size="19" text-anchor="end">#2</text>
+  <text x="250" y="648" fill="#6B7280" font-size="19" text-anchor="end">#3</text>
+  <text x="250" y="698" fill="#6B7280" font-size="19" text-anchor="end">#4</text>
+  <text x="250" y="748" fill="#6B7280" font-size="19" text-anchor="end">#5</text>
+  <text x="250" y="798" fill="#6B7280" font-size="19" text-anchor="end">#6</text>
+
+  <!-- ROCK  #003049 : ranks 70s1 80s1 90s1 00s4 10s6 20s5 -->
+  <polyline points="300,540 420,540 540,540 660,690 780,790 900,740" fill="none" stroke="#003049" stroke-width="4" opacity="0.55"/>
+  <circle cx="300" cy="540" r="15" fill="#003049"/>
+  <circle cx="420" cy="540" r="15" fill="#003049"/>
+  <circle cx="540" cy="540" r="15" fill="#003049"/>
+  <circle cx="660" cy="690" r="15" fill="#003049"/>
+  <circle cx="780" cy="790" r="15" fill="#003049"/>
+  <circle cx="900" cy="740" r="15" fill="#003049"/>
+  <text x="930" y="746" fill="#003049" font-size="22" font-weight="bold">Rock</text>
+
+  <!-- HIP-HOP/RAP #94D2BD : ranks 70s6 80s6 90s3 00s2 10s2 20s1 -->
+  <polyline points="300,790 420,790 540,640 660,590 780,590 900,540" fill="none" stroke="#94D2BD" stroke-width="4" opacity="0.75"/>
+  <circle cx="300" cy="790" r="15" fill="#94D2BD"/>
+  <circle cx="420" cy="790" r="15" fill="#94D2BD"/>
+  <circle cx="540" cy="640" r="15" fill="#94D2BD"/>
+  <circle cx="660" cy="590" r="15" fill="#94D2BD"/>
+  <circle cx="780" cy="590" r="15" fill="#94D2BD"/>
+  <circle cx="900" cy="540" r="15" fill="#94D2BD"/>
+  <text x="930" y="546" fill="#2A7D63" font-size="22" font-weight="bold">Hip-Hop/Rap</text>
+
+  <!-- POP #0A9396 : ranks 70s3 80s3 90s4 00s3 10s1 20s3 -->
+  <polyline points="300,640 420,640 540,690 660,640 780,540 900,640" fill="none" stroke="#0A9396" stroke-width="4" opacity="0.55"/>
+  <circle cx="300" cy="640" r="15" fill="#0A9396"/>
+  <circle cx="420" cy="640" r="15" fill="#0A9396"/>
+  <circle cx="540" cy="690" r="15" fill="#0A9396"/>
+  <circle cx="660" cy="640" r="15" fill="#0A9396"/>
+  <circle cx="780" cy="540" r="15" fill="#0A9396"/>
+  <circle cx="900" cy="640" r="15" fill="#0A9396"/>
+
+  <!-- COUNTRY #EE9B00 : ranks 70s4 80s5 90s6 00s1 10s3 20s2 -->
+  <polyline points="300,690 420,740 540,790 660,540 780,640 900,590" fill="none" stroke="#EE9B00" stroke-width="4" opacity="0.45"/>
+  <circle cx="300" cy="690" r="15" fill="#EE9B00"/>
+  <circle cx="420" cy="740" r="15" fill="#EE9B00"/>
+  <circle cx="540" cy="790" r="15" fill="#EE9B00"/>
+  <circle cx="660" cy="540" r="15" fill="#EE9B00"/>
+  <circle cx="780" cy="640" r="15" fill="#EE9B00"/>
+  <circle cx="900" cy="590" r="15" fill="#EE9B00"/>
+
+  <!-- R&B/SOUL #BB3E03 : ranks 70s2 80s2 90s2 00s5 10s5 20s4 -->
+  <polyline points="300,590 420,590 540,590 660,740 780,740 900,690" fill="none" stroke="#BB3E03" stroke-width="4" opacity="0.40"/>
+  <circle cx="300" cy="590" r="15" fill="#BB3E03"/>
+  <circle cx="420" cy="590" r="15" fill="#BB3E03"/>
+  <circle cx="540" cy="590" r="15" fill="#BB3E03"/>
+  <circle cx="660" cy="740" r="15" fill="#BB3E03"/>
+  <circle cx="780" cy="740" r="15" fill="#BB3E03"/>
+  <circle cx="900" cy="690" r="15" fill="#BB3E03"/>
+
+  <!-- DANCE/ELECTRONIC #CA6702 : ranks 70s5 80s4 90s5 00s6 10s4 20s6 -->
+  <polyline points="300,740 420,690 540,740 660,790 780,690 900,790" fill="none" stroke="#CA6702" stroke-width="4" opacity="0.35"/>
+  <circle cx="300" cy="740" r="15" fill="#CA6702"/>
+  <circle cx="420" cy="690" r="15" fill="#CA6702"/>
+  <circle cx="540" cy="740" r="15" fill="#CA6702"/>
+  <circle cx="660" cy="790" r="15" fill="#CA6702"/>
+  <circle cx="780" cy="690" r="15" fill="#CA6702"/>
+  <circle cx="900" cy="790" r="15" fill="#CA6702"/>
+
+  <!-- key line below the grid -->
+  <text x="80" y="862" fill="#6B7280" font-size="22">Rock sat at <tspan fill="#003049" font-weight="bold">#1 from the 1970s into the 1990s</tspan>, then slid to the bottom. Hip-Hop/Rap climbed from</text>
+  <text x="80" y="892" fill="#6B7280" font-size="22">dead last to <tspan fill="#2A7D63" font-weight="bold">#1 by the 2020s</tspan>. The other legend genres (Pop, Country, R&amp;B/Soul, Dance/Electronic) sit faint.</text>
+
+  <!-- divider -->
+  <line x1="80" y1="950" x2="1120" y2="950" stroke="#E9D8A6" stroke-width="3"/>
+
+  <!-- ============================================================= -->
+  <!-- SECTION 2 — STREAMING DOUBLED CHART LONGEVITY                 -->
+  <!-- ============================================================= -->
+  <text x="80" y="1040" fill="#003049" font-size="34" font-weight="bold">Streaming nearly doubled a song's chart life</text>
+  <text x="80" y="1074" fill="#6B7280" font-size="24">Most weeks a single song ever spent on the Hot 100, before vs during streaming.</text>
+
+  <!-- big-number punch (sits in the open band above the bars, right side) -->
+  <text x="1120" y="1130" fill="#BB3E03" font-size="64" font-weight="bold" text-anchor="end">1.3&#215;</text>
+  <text x="1120" y="1162" fill="#6B7280" font-size="22" text-anchor="end">longer at the top</text>
+
+  <!-- proportional bars (track x340 -> x900 is 560px at max value 112 weeks) -->
+  <!-- Pre-streaming record: Radioactive 87 -> 435.0 (Rock navy) -->
+  <text x="320" y="1218" fill="#003049" font-size="24" font-weight="bold" text-anchor="end">Pre-streaming</text>
+  <text x="320" y="1246" fill="#6B7280" font-size="19" text-anchor="end">1958&#8211;2012</text>
+  <rect x="340" y="1190" width="435.0" height="56" fill="#003049"/>
+  <text x="358" y="1226" fill="#FFFFFF" font-size="26" font-weight="bold">87 weeks</text>
+  <text x="790" y="1226" fill="#6B7280" font-size="20">Radioactive &#183; Imagine Dragons</text>
+
+  <!-- Streaming era record: Lose Control 112 -> 560.0 (R&B/Soul spice) -->
+  <text x="320" y="1318" fill="#003049" font-size="24" font-weight="bold" text-anchor="end">Streaming era</text>
+  <text x="320" y="1346" fill="#6B7280" font-size="19" text-anchor="end">2013&#8211;2026</text>
+  <rect x="340" y="1290" width="560.0" height="56" fill="#BB3E03"/>
+  <text x="358" y="1326" fill="#FFFFFF" font-size="26" font-weight="bold">112 weeks</text>
+  <text x="915" y="1326" fill="#6B7280" font-size="20">Lose Control &#183; Teddy Swims</text>
+
+  <text x="80" y="1412" fill="#6B7280" font-size="22">The streaming-era top ten runs far longer than any pre-streaming hit &#8212; four of them beat the old 87-week record.</text>
+
+  <!-- divider -->
+  <line x1="80" y1="1450" x2="1120" y2="1450" stroke="#E9D8A6" stroke-width="3"/>
+
+  <!-- ============================================================= -->
+  <!-- SECTION 3 — THE GENRE MIX FLIPPED                             -->
+  <!-- ============================================================= -->
+  <text x="80" y="1540" fill="#003049" font-size="34" font-weight="bold">And the longest-charting songs changed genre</text>
+  <text x="80" y="1574" fill="#6B7280" font-size="24">Genre mix of the ten longest-charting songs in each era (one block = one song).</text>
+
+  <!-- PRE-STREAMING row: Pop x4, Rock x3, Country x2, Hip-Hop/Rap x1 -->
+  <text x="80" y="1648" fill="#003049" font-size="24" font-weight="bold">Pre-streaming top 10</text>
+  <!-- 10 blocks, width 100, gap 4, start x80 y1670 -->
+  <rect x="80"  y="1670" width="100" height="60" fill="#0A9396"/>
+  <rect x="184" y="1670" width="100" height="60" fill="#0A9396"/>
+  <rect x="288" y="1670" width="100" height="60" fill="#0A9396"/>
+  <rect x="392" y="1670" width="100" height="60" fill="#0A9396"/>
+  <rect x="496" y="1670" width="100" height="60" fill="#003049"/>
+  <rect x="600" y="1670" width="100" height="60" fill="#003049"/>
+  <rect x="704" y="1670" width="100" height="60" fill="#003049"/>
+  <rect x="808" y="1670" width="100" height="60" fill="#EE9B00"/>
+  <rect x="912" y="1670" width="100" height="60" fill="#EE9B00"/>
+  <rect x="1016" y="1670" width="100" height="60" fill="#94D2BD"/>
+  <text x="80" y="1760" fill="#6B7280" font-size="21">Pop &#215;4 &#160;&#8226;&#160; Rock &#215;3 &#160;&#8226;&#160; Country &#215;2 &#160;&#8226;&#160; Hip-Hop/Rap &#215;1</text>
+
+  <!-- STREAMING-ERA row: R&B/Soul x4, Dance/Electronic x3, Pop x2, Country x1 -->
+  <text x="80" y="1848" fill="#003049" font-size="24" font-weight="bold">Streaming-era top 10</text>
+  <rect x="80"  y="1870" width="100" height="60" fill="#BB3E03"/>
+  <rect x="184" y="1870" width="100" height="60" fill="#BB3E03"/>
+  <rect x="288" y="1870" width="100" height="60" fill="#BB3E03"/>
+  <rect x="392" y="1870" width="100" height="60" fill="#BB3E03"/>
+  <rect x="496" y="1870" width="100" height="60" fill="#CA6702"/>
+  <rect x="600" y="1870" width="100" height="60" fill="#CA6702"/>
+  <rect x="704" y="1870" width="100" height="60" fill="#CA6702"/>
+  <rect x="808" y="1870" width="100" height="60" fill="#0A9396"/>
+  <rect x="912" y="1870" width="100" height="60" fill="#0A9396"/>
+  <rect x="1016" y="1870" width="100" height="60" fill="#EE9B00"/>
+  <text x="80" y="1960" fill="#6B7280" font-size="21">R&amp;B/Soul &#215;4 &#160;&#8226;&#160; Dance/Electronic &#215;3 &#160;&#8226;&#160; Pop &#215;2 &#160;&#8226;&#160; Country &#215;1</text>
+
+  <text x="80" y="2024" fill="#6B7280" font-size="22"><tspan fill="#003049" font-weight="bold">No Rock at all</tspan> in the streaming-era top ten &#8212; R&amp;B/Soul and Dance/Electronic lead instead.</text>
+
+  <!-- the hinge callout -->
+  <text x="80" y="2092" fill="#BB3E03" font-size="26" font-weight="bold">The hinge: 2013</text>
+  <text x="80" y="2124" fill="#6B7280" font-size="22">On-demand streaming was folded into the Hot 100 formula &#8212; reshaping the genre mix and rewarding long runs.</text>
+
+  <!-- ============================================================= -->
+  <!-- FOOTER BAND  (pinned to bottom of canvas height 2240)         -->
+  <!-- ============================================================= -->
+  <rect x="0" y="2150" width="1200" height="90" fill="#003049"/>
+  <text x="80" y="2195" fill="#FFFFFF" font-size="24" font-weight="bold">@unwelcomedata</text>
+  <text x="80" y="2225" fill="#94D2BD" font-size="18">Billboard Hot 100 chart history &#183; genre via MusicBrainz artist tags &#183; post-2013 reflects the modern streaming-weighted formula.</text>
+</svg>
