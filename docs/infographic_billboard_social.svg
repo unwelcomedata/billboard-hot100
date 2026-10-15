@@ -75,7 +75,7 @@
   <!-- ============================================================= -->
   <!-- RIGHT COLUMN — LONGEVITY + GENRE FLIP                         -->
   <!-- ============================================================= -->
-  <text x="860" y="268" fill="#003049" font-size="28" font-weight="bold">Streaming nearly doubled chart life</text>
+  <text x="860" y="268" fill="#003049" font-size="28" font-weight="bold">Streaming stretched chart life</text>
   <text x="860" y="296" fill="#6B7280" font-size="19">Most weeks one song ever spent on the Hot 100.</text>
 
   <!-- bars: track x1020 -> x1520 is 500px at max 112 -->
